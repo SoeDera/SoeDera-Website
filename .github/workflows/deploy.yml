@@ -1,32 +1,57 @@
-name: Deploy to Azure Web App
+name: Build and Deploy to Azure Web App
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+  workflow_dispatch:
 
-permissions:
-  contents: read
+env:
+  # 🔧 Change this to your Azure App Service name (NOT the URL)
+  AZURE_WEBAPP_NAME: "YOUR_APP_SERVICE_NAME"
+
+  # 🔧 If your app is in a subfolder (e.g. "client" or "apps/web"), set it here.
+  # Leave as "." if package.json is at repo root.
+  APP_PATH: "."
+
+  # Optional: Node version
+  NODE_VERSION: "20"
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.APP_PATH }}/package-lock.json
 
-      - name: Install and build
+      - name: Install dependencies
+        working-directory: ${{ env.APP_PATH }}
         run: |
-          npm ci
-          npm run build --if-present
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found -> using npm ci"
+            npm ci
+          else
+            echo "package-lock.json not found -> using npm install"
+            npm install
+          fi
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: YOUR_APP_SERVICE_NAME
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
-          package: .
+      - name: Build (if present)
+        working-directory: ${{ env.APP_PATH }}
+        run: npm run build --if-present
+
+      # If your app needs tests, uncomment this:
+      # - name: Test (if present)
+      #   working-directory: ${{ env.APP_PATH }}
+      #   run: npm test --if-present
+
+      - name: Create deployment package
+        run: |
+          cd "${{ env.APP_PATH_
