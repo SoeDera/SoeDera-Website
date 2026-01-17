@@ -5,16 +5,28 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened, synchronize, reopened, closed]
     branches:
       - main
 
 jobs:
-  build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+  # Build-only for PRs (no deploy, so no token needed)
+  pr_build_job:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    name: Build and Deploy Job
+    name: PR Build (no deploy)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Build
+        run: npm run build --if-present
 
+  # Deploy only on push to main (token works here)
+  build_and_deploy_job:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    name: Build and Deploy (main)
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,28 +34,10 @@ jobs:
           lfs: false
 
       - name: Build And Deploy
-        id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
-          # ✅ Create this secret in the NEW repo:
-          # Settings → Secrets and variables → Actions → New repository secret
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-
           action: "upload"
-
-          # Keep these if they match your project structure:
-          app_location: "/"        # Frontend source
-          api_location: "api"      # Set to "" if you don't have an API folder
-          output_location: "dist"  # Vite default. Use "build" for CRA, "out" for next export, etc.
-
-  close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    name: Close Pull Request Job
-    steps:
-      - name: Close Pull Request
-        id: closepullrequest
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-          action: "close"
+          app_location: "/"
+          api_location: "api"       # set to "" if you don't have an API folder
+          output_location: "dist"   # change if your build output differs
